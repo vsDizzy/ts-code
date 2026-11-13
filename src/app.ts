@@ -1,0 +1,36 @@
+import { H3, serve, serveStatic } from 'h3'
+import { readFile, stat } from 'node:fs/promises'
+import { join } from 'node:path'
+
+const app = new H3()
+
+// Serve files from public/ at the site root: GET /index.html -> public/index.html.
+// serveStatic passes the full request path as `id`.
+const toFile = (id: string) => join('public', id)
+
+app.use((event) => {
+  return serveStatic(event, {
+    // Let unmatched requests fall through to other routes / the default 404.
+    fallthrough: true,
+    indexNames: ['/index.html'],
+    getContents: (id) => readFile(toFile(id)),
+    getMeta: async (id) => {
+      const stats = await stat(toFile(id)).catch(() => {})
+      if (stats?.isFile()) {
+        return {
+          size: stats.size,
+          mtime: stats.mtimeMs,
+        }
+      }
+    },
+  })
+})
+
+const server = serve(app, { port: 3000 })
+await server.ready()
+
+// server.url is the raw bind address; "[::]" / "0.0.0.0" mean "all interfaces"
+// and aren't openable in a browser, so show localhost instead.
+const url = new URL(server.url!)
+if (url.hostname === '[::]' || url.hostname === '0.0.0.0') url.hostname = 'localhost'
+console.info('Started server on:', url.href)

@@ -1,0 +1,21 @@
+{
+  "name": "ts-code",
+  "version": "0.1.0",
+  "private": true,
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm"
+    }
+  },
+  "type": "module",
+  "scripts": {
+    "start": "node src/app.ts",
+    "dev": "node --watch src/app.ts"
+  },
+  "dependencies": {
+    "h3": "^2.0.8"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6"
+  }
+}
