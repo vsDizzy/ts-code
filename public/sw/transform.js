@@ -2,8 +2,8 @@
 // (TypeScript -> JS, etc.): fetch the source, transform it, cache the output.
 //
 // The output is revalidated against the server on every request using the
-// source's validators (If-None-Match / If-Modified-Since). On 304 the cached
-// output is served without transforming again. Errors are cached the same way:
+// source's ETag (If-None-Match; the dev server sends no Last-Modified, see
+// src/app.ts). On 304 the cached output is served without transforming again. Errors are cached the same way:
 // same source + same settings = same errors.
 
 /**
@@ -26,13 +26,11 @@ export async function serveTransformed({ url, cacheName, variant, transform }) {
   const cache = await caches.open(cacheName)
   const cached = await cache.match(key)
 
-  // Manual conditional headers + no-store: the HTTP cache stays out of it and
+  // Manual conditional header + no-store: the HTTP cache stays out of it and
   // the server's 304 reaches us as is.
   const headers = new Headers()
   const etag = cached?.headers.get('x-source-etag')
-  const lastModified = cached?.headers.get('x-source-last-modified')
   if (etag) headers.set('if-none-match', etag)
-  if (lastModified) headers.set('if-modified-since', lastModified)
   const source = await fetch(url, { headers, cache: 'no-store' })
 
   if (source.status === 304 && cached) {
@@ -51,7 +49,6 @@ export async function serveTransformed({ url, cacheName, variant, transform }) {
     headers: {
       'content-type': ok ? result.contentType : 'text/plain; charset=utf-8',
       'x-source-etag': source.headers.get('etag') ?? '',
-      'x-source-last-modified': source.headers.get('last-modified') ?? '',
       'x-transform-cache': 'miss',
     },
   })

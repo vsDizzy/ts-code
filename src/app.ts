@@ -23,9 +23,12 @@ app.use((event) => {
       if (stats?.isFile()) {
         return {
           size: stats.size,
-          mtime: stats.mtimeMs,
-          // Last-Modified only has 1s precision, so two saves within the same
-          // second would still get a 304. The ETag uses full mtime precision.
+          // No mtime, so no Last-Modified: ETag only.
+          // - Last-Modified has 1s precision, so two saves within the same
+          //   second would still get a 304. The ETag uses full mtime precision.
+          // - Browsers derive a heuristic freshness from Last-Modified when
+          //   there's no Cache-Control, and serve such files from the HTTP cache
+          //   without asking the server. Without it they revalidate every time.
           etag: `W/"${stats.size.toString(36)}-${stats.mtimeMs.toString(36)}"`,
         }
       }
