@@ -5,14 +5,32 @@
       color-scheme: light dark;
     }
   </style>
+  <!-- React from esm.sh, one pinned version. react-dom is requested with
+       ?external=react so it imports the bare "react" mapped here instead of
+       esm.sh's own copy (two Reacts break hooks). react/jsx-runtime is what
+       "jsx": "react-jsx" compiles JSX to. -->
+  <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@19.2.0",
+        "react/jsx-runtime": "https://esm.sh/react@19.2.0/jsx-runtime",
+        "react-dom/client": "https://esm.sh/react-dom@19.2.0/client?external=react"
+      }
+    }
+  </script>
   <script src="/sw-register.js" defer></script>
   <script src="/livereload.js" defer></script>
   <!-- Started by sw-register.js once the service worker controls the page. -->
   <script type="tsconfig.json">
-    { "compilerOptions": { "target": "esnext" } }
+    {
+      "compilerOptions": {
+        "target": "esnext",
+        "jsx": "react-jsx"
+      }
+    }
   </script>
-  <script type="ts" src="/app/app.ts"></script>
+  <script type="ts" src="/app/main.tsx"></script>
 </head>
 <body>
-  hello world
+  <div id="root"></div>
 </body>
