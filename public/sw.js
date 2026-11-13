@@ -9,10 +9,19 @@
 // treats ANY byte change as a new version. VERSION is in the logs and in the
 // handlers' cache names: bump it when changing handler code (sw/*.js), so
 // output cached by the old code is dropped on activate.
+//
+// Cache names are paths: `${APP_CACHE_PREFIX}${VERSION}/<handler's own>`,
+// e.g. "ts-code/v1/ts:6.0.3". On activate every cache under APP_CACHE_PREFIX
+// that no current handler lists is deleted, so caches of older SW versions,
+// renamed caches and caches of removed handlers all go away.
 import { typescript } from './sw/typescript.js'
 
 const VERSION = 'v1'
+const APP_CACHE_PREFIX = 'ts-code/'
 const log = (...args) => console.info(`[sw ${VERSION}]`, ...args)
+
+/** Names used before APP_CACHE_PREFIX existed; deleted on activate too. */
+const isLegacyCache = (name) => name.startsWith('ts-transpile:') || name === 'ts-config'
 
 /**
  * @typedef {object} Handler
@@ -22,12 +31,24 @@ const log = (...args) => console.info(`[sw ${VERSION}]`, ...args)
  * @property {(event: FetchEvent, url: URL) => Promise<Response>} handle
  * @property {(event: ExtendableMessageEvent) => boolean} [message] Handle a page
  *   message; return true if it was this handler's.
- * @property {() => Promise<void>} [activate] Runs when this SW version activates
- *   (e.g. to delete caches of older versions).
+ * @property {string[]} caches Cache Storage names this handler uses (all under
+ *   the cachePrefix it was given). Any other cache under APP_CACHE_PREFIX is
+ *   deleted on activate.
  */
 
 /** @type {Handler[]} */
-const HANDLERS = [typescript({ version: VERSION })]
+const HANDLERS = [typescript({ cachePrefix: `${APP_CACHE_PREFIX}${VERSION}` })]
+
+/** Deletes caches under APP_CACHE_PREFIX (and legacy ones) no handler uses. */
+async function deleteUnusedCaches() {
+  const used = new Set(HANDLERS.flatMap((h) => h.caches))
+  for (const name of await caches.keys()) {
+    if ((name.startsWith(APP_CACHE_PREFIX) && !used.has(name)) || isLegacyCache(name)) {
+      log('deleting cache', name)
+      await caches.delete(name)
+    }
+  }
+}
 
 self.addEventListener('install', () => {
   log('install, handlers:', HANDLERS.map((h) => h.name).join(', '))
@@ -39,7 +60,7 @@ self.addEventListener('activate', (event) => {
   log('activate')
   event.waitUntil(
     (async () => {
-      await Promise.all(HANDLERS.map((h) => h.activate?.()))
+      await deleteUnusedCaches()
       // Take control of already open pages right away (incl. the page that
       // registered us on first install), instead of only after their next load.
       await self.clients.claim()

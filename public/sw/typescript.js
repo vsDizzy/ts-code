@@ -2,17 +2,13 @@
 // requests to handlers) -> JavaScript.
 //
 // Compiler options = DEFAULT_COMPILER_OPTIONS + the page's
-// <script type="tsconfig">{ "compilerOptions": ... }</script>, which
+// <script type="tsconfig.json">{ "compilerOptions": ... }</script>, which
 // sw-register.js sends here (TSCONFIG message) before any ts script runs.
 //
 // TypeScript 6.x is the last release with a JS API (7.x is the native Go
 // compiler), so it's pinned here.
 import ts from 'https://esm.sh/typescript@6.0.3'
-import { deleteOldCaches, serveTransformed, sha256 } from './transform.js'
-
-const CACHE_PREFIX = 'ts-transpile:'
-/** Per-page tsconfig, keyed by page URL. */
-const CONFIG_CACHE = 'ts-config'
+import { serveTransformed, sha256 } from './transform.js'
 
 /** Merged under the page's tsconfig compilerOptions. */
 const DEFAULT_COMPILER_OPTIONS = {
@@ -24,23 +20,30 @@ const DEFAULT_COMPILER_OPTIONS = {
 
 /**
  * @param {object} options
- * @param {string} options.version Service worker VERSION. Part of the cache name,
- *   so bumping it drops all cached output, e.g. after changing this handler's code
- *   (unchanged sources would otherwise keep getting 304 -> old output).
+ * @param {string} options.cachePrefix Prefix for this handler's cache names,
+ *   e.g. "ts-code/v1". It contains the SW VERSION, so bumping that drops all
+ *   cached output, e.g. after changing this handler's code (unchanged sources
+ *   would otherwise keep getting 304 -> old output).
  * @returns {import('../sw.js').Handler}
  */
-export function typescript({ version }) {
-  // Invalidated by: SW VERSION, TypeScript version (cache name);
-  // compiler options (variant hash below); source changes (304 revalidation).
-  const cacheName = `${CACHE_PREFIX}${version}:${ts.version}`
+export function typescript({ cachePrefix }) {
+  // Transpiled output. Invalidated by: SW VERSION, TypeScript version (cache
+  // name); compiler options (variant hash below); source changes (304 revalidation).
+  const cacheName = `${cachePrefix}/ts:${ts.version}`
+  // Per-page tsconfig, keyed by page URL. Persisted, not kept in memory: the
+  // browser may stop the worker at any time and later restart it for a fetch.
+  // Dropped with the SW version; pages resend it on every load (sw-register.js).
+  const configCache = `${cachePrefix}/tsconfig.json`
 
   return {
     name: `typescript ${ts.version}`,
 
+    caches: [cacheName, configCache],
+
     match: (url, request) => request.method === 'GET' && /\.tsx?$/.test(url.pathname),
 
     async handle(event, url) {
-      const configText = await loadConfig(event.clientId)
+      const configText = await loadConfig(configCache, event.clientId)
       return serveTransformed({
         url,
         cacheName,
@@ -52,32 +55,29 @@ export function typescript({ version }) {
 
     message(event) {
       if (event.data?.type !== 'TSCONFIG') return false
-      // Persisted, not kept in memory: the browser may stop the worker at any
-      // time and later restart it for a fetch.
       event.waitUntil(
-        saveConfig(event.source.url, event.data.config).then(() => event.ports[0]?.postMessage('ok')),
+        saveConfig(configCache, event.source.url, event.data.config).then(() =>
+          event.ports[0]?.postMessage('ok'),
+        ),
       )
       return true
     },
-
-    // Drop output of other SW / TypeScript versions.
-    activate: () => deleteOldCaches(CACHE_PREFIX, cacheName),
   }
 }
 
 // --- tsconfig ------------------------------------------------------------------
 
-async function saveConfig(pageUrl, configText) {
-  const cache = await caches.open(CONFIG_CACHE)
+async function saveConfig(cacheName, pageUrl, configText) {
+  const cache = await caches.open(cacheName)
   if (configText == null) await cache.delete(pageUrl)
   else await cache.put(pageUrl, new Response(configText))
 }
 
 /** tsconfig text of the page that made the request, or null if it has none. */
-async function loadConfig(clientId) {
+async function loadConfig(cacheName, clientId) {
   const client = clientId && (await self.clients.get(clientId))
   if (!client) return null
-  const res = await (await caches.open(CONFIG_CACHE)).match(client.url)
+  const res = await (await caches.open(cacheName)).match(client.url)
   return res ? res.text() : null
 }
 
@@ -96,7 +96,7 @@ function transpile(source, fileName, configText) {
     try {
       config = JSON.parse(configText)
     } catch (err) {
-      return { error: `<script type="tsconfig">: invalid JSON: ${err.message}` }
+      return { error: `<script type="tsconfig.json">: invalid JSON: ${err.message}` }
     }
   }
 
@@ -105,7 +105,7 @@ function transpile(source, fileName, configText) {
     '/',
   )
   if (converted.errors.length) {
-    return { error: '<script type="tsconfig">:\n' + ts.formatDiagnostics(converted.errors, diagnosticsHost) }
+    return { error: '<script type="tsconfig.json">:\n' + ts.formatDiagnostics(converted.errors, diagnosticsHost) }
   }
 
   const out = ts.transpileModule(source, {

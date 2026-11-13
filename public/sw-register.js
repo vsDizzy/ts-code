@@ -16,7 +16,7 @@
 // so the app and everything it loads goes through the SW (which transpiles
 // .ts/.tsx).
 //
-// <script type="tsconfig">{ "compilerOptions": { ... } }</script>: sent to the
+// <script type="tsconfig.json">{ "compilerOptions": { ... } }</script>: sent to the
 // SW before the ts scripts start, and used to transpile this page's .ts files.
 ;(() => {
   const log = (...args) => console.info('[sw-register]', ...args)
@@ -32,7 +32,7 @@
       warn('no service worker; <script type="ts"> will load untranspiled')
       return
     }
-    const config = document.querySelector('script[type="tsconfig"]')?.textContent ?? null
+    const config = document.querySelector('script[type="tsconfig.json"]')?.textContent ?? null
     const { port1, port2 } = new MessageChannel()
     const { promise: ack, resolve } = Promise.withResolvers()
     port1.onmessage = resolve

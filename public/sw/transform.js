@@ -64,10 +64,3 @@ export async function sha256(text) {
   const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
   return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16)
 }
-
-/** Deletes caches named `${prefix}...` except `keep` (outputs of older versions). */
-export async function deleteOldCaches(prefix, keep) {
-  for (const name of await caches.keys()) {
-    if (name.startsWith(prefix) && name !== keep) await caches.delete(name)
-  }
-}
