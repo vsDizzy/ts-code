@@ -10,10 +10,14 @@
 // handler. It also resolves (with a warning) when that can't happen, so code
 // waiting on it always runs.
 //
-// <script type="app" src="..."> (or with inline code): the browser ignores
+// <script type="ts" src="..."> (or with inline code): the browser ignores
 // unknown script types, so these stay inert until swControlled resolves; then
 // each is swapped for a real <script type="module"> with the same attributes,
-// so the app and everything it loads goes through the SW.
+// so the app and everything it loads goes through the SW (which transpiles
+// .ts/.tsx).
+//
+// <script type="tsconfig">{ "compilerOptions": { ... } }</script>: sent to the
+// SW before the ts scripts start, and used to transpile this page's .ts files.
 ;(() => {
   const log = (...args) => console.info('[sw-register]', ...args)
   const warn = (...args) => console.warn('[sw-register]', ...args)
@@ -21,8 +25,26 @@
   const { promise: controlled, resolve: resolveControlled } = Promise.withResolvers()
   window.swControlled = controlled
 
-  controlled.then(() => {
-    for (const placeholder of document.querySelectorAll('script[type="app"]')) {
+  // Hands this page's tsconfig to the controlling SW and waits for it to be stored.
+  const sendTsConfig = async () => {
+    const controller = navigator.serviceWorker?.controller
+    if (!controller) {
+      warn('no service worker; <script type="ts"> will load untranspiled')
+      return
+    }
+    const config = document.querySelector('script[type="tsconfig"]')?.textContent ?? null
+    const { port1, port2 } = new MessageChannel()
+    const { promise: ack, resolve } = Promise.withResolvers()
+    port1.onmessage = resolve
+    controller.postMessage({ type: 'TSCONFIG', config }, [port2])
+    // An older SW version may not know TSCONFIG; don't hang the page on it.
+    const timeout = new Promise((r) => setTimeout(() => r('timeout'), 2000))
+    if ((await Promise.race([ack, timeout])) === 'timeout') warn('service worker did not ack tsconfig')
+  }
+
+  controlled.then(async () => {
+    await sendTsConfig()
+    for (const placeholder of document.querySelectorAll('script[type="ts"]')) {
       const script = document.createElement('script')
       for (const { name, value } of placeholder.attributes) script.setAttribute(name, value)
       script.type = 'module'
@@ -84,9 +106,10 @@
     })
   }
 
-  // updateViaCache: 'none' — check sw.js (and its importScripts) against the
-  // server on every update check, bypassing the HTTP cache.
-  sw.register('/sw.js', { updateViaCache: 'none' })
+  // type: 'module' — sw.js uses static `import` (TypeScript from esm.sh).
+  // updateViaCache: 'none' — check sw.js (and its imports) against the server
+  // on every update check, bypassing the HTTP cache.
+  sw.register('/sw.js', { type: 'module', updateViaCache: 'none' })
     .then((reg) => {
       // A version that finished installing during an earlier visit and is still
       // waiting (e.g. that tab was closed before it could activate).
@@ -97,10 +120,18 @@
         track(reg, reg.installing)
       })
       // An active worker exists but doesn't control us and nothing is being
-      // installed: a hard reload (Shift+F5) bypasses the SW for this page load.
+      // installed: a hard reload (Ctrl+F5 / Shift+F5) loads the page bypassing
+      // the SW, and the page would stay uncontrolled. Ask the active worker to
+      // claim it; the resulting controllerchange resolves swControlled above.
+      // (With an install/waiting worker in flight, its activate claims us anyway.)
       if (!sw.controller && reg.active && !reg.installing && !reg.waiting) {
-        warn('page not controlled (hard reload?); continuing without the service worker')
-        resolveControlled()
+        log('page not controlled (hard reload), asking the service worker to claim it')
+        reg.active.postMessage({ type: 'CLAIM' })
+        setTimeout(() => {
+          if (sw.controller) return
+          warn('service worker did not take control; continuing without it')
+          resolveControlled()
+        }, 2000)
       }
     })
     .catch((err) => {

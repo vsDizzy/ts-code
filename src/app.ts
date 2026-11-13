@@ -24,6 +24,9 @@ app.use((event) => {
         return {
           size: stats.size,
           mtime: stats.mtimeMs,
+          // Last-Modified only has 1s precision, so two saves within the same
+          // second would still get a 304. The ETag uses full mtime precision.
+          etag: `W/"${stats.size.toString(36)}-${stats.mtimeMs.toString(36)}"`,
         }
       }
     },
