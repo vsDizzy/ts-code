@@ -1,8 +1,12 @@
 import { H3, serve, serveStatic } from 'h3'
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { liveReload } from './livereload.ts'
 
 const app = new H3()
+
+// SSE endpoint /__livereload + file watcher; see src/livereload.ts.
+liveReload(app, { ignore: ['**/node_modules'] })
 
 // Serve files from public/ at the site root: GET /index.html -> public/index.html.
 // serveStatic passes the full request path as `id`.
