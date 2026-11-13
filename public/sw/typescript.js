@@ -1,4 +1,5 @@
-// Service worker handler: *.ts / *.tsx (same origin, GET) -> JavaScript.
+// Service worker handler: *.ts / *.tsx (GET; sw.js only passes same-origin
+// requests to handlers) -> JavaScript.
 //
 // Compiler options = DEFAULT_COMPILER_OPTIONS + the page's
 // <script type="tsconfig">{ "compilerOptions": ... }</script>, which
@@ -36,8 +37,7 @@ export function typescript({ version }) {
   return {
     name: `typescript ${ts.version}`,
 
-    match: (url, request) =>
-      request.method === 'GET' && url.origin === location.origin && /\.tsx?$/.test(url.pathname),
+    match: (url, request) => request.method === 'GET' && /\.tsx?$/.test(url.pathname),
 
     async handle(event, url) {
       const configText = await loadConfig(event.clientId)

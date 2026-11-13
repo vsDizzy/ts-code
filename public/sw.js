@@ -1,8 +1,9 @@
 // Service worker (registered as a module, see public/sw-register.js).
 //
-// Lifecycle + request dispatch. Requests are offered to HANDLERS in order; the
-// first whose match() returns true serves it. Anything unmatched passes through
-// to the network unchanged.
+// Lifecycle + request dispatch. Same-origin requests are offered to HANDLERS in
+// order; the first whose match() returns true serves it. Anything unmatched
+// passes through to the network unchanged. Other origins and Server-Sent Events
+// aren't intercepted at all.
 //
 // The browser re-downloads this file (and its imports) on every page load and
 // treats ANY byte change as a new version. VERSION is in the logs and in the
@@ -16,7 +17,8 @@ const log = (...args) => console.info(`[sw ${VERSION}]`, ...args)
 /**
  * @typedef {object} Handler
  * @property {string} name For logs.
- * @property {(url: URL, request: Request) => boolean} match Whether to serve this request.
+ * @property {(url: URL, request: Request) => boolean} match Whether to serve this
+ *   request. Only same-origin requests get here.
  * @property {(event: FetchEvent, url: URL) => Promise<Response>} handle
  * @property {(event: ExtendableMessageEvent) => boolean} [message] Handle a page
  *   message; return true if it was this handler's.
@@ -63,7 +65,16 @@ self.addEventListener('message', (event) => {
 })
 
 self.addEventListener('fetch', (event) => {
+  // Leave Server-Sent Events (e.g. /__livereload) to the browser. A stream
+  // piped through respondWith() never finishes, which keeps this worker "busy":
+  // the browser won't activate a new version (even after skipWaiting) until the
+  // page that holds the stream unloads.
+  if (event.request.headers.get('accept') === 'text/event-stream') return
+
+  // Other origins (CDNs, APIs, ...) go straight to the network as well.
   const url = new URL(event.request.url)
+  if (url.origin !== location.origin) return
+
   const handler = HANDLERS.find((h) => h.match(url, event.request))
   // Unmatched: pass-through, respond with whatever the network returns.
   event.respondWith(handler ? handler.handle(event, url) : fetch(event.request))
