@@ -3,6 +3,7 @@ import { EventStream, type H3 } from 'h3'
 import { watch } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { posix } from 'node:path'
+import { RUNTIME_PATH } from './env.ts'
 
 const CLIENT_FILE = new URL('./livereload.client.js', import.meta.url)
 
@@ -11,13 +12,13 @@ export interface LiveReloadOptions {
   root?: string
   /** Ignored globs relative to `root`; a matching directory is ignored entirely. */
   ignore?: string[]
-  /** SSE endpoint path; the client script is served at `${path}.js`. Default: `/@ts-code/livereload`. */
+  /** SSE endpoint path; the client script is served at `${path}.js`. Default: `/@<package name>/livereload`. */
   path?: string
 }
 
 /** Registers the SSE endpoint and client script, starts the watcher. */
 export function liveReload(app: H3, options: LiveReloadOptions = {}) {
-  const { root = '.', ignore = ['**/node_modules'], path = '/@ts-code/livereload' } = options
+  const { root = '.', ignore = ['**/node_modules'], path = `${RUNTIME_PATH}/livereload` } = options
 
   // New on every server start; clients reload if it differs after a reconnect.
   const bootId = Date.now().toString(36)
