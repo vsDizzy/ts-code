@@ -5,7 +5,8 @@ import { liveReload } from './livereload.ts'
 
 const app = new H3()
 
-const { inject } = liveReload(app, { ignore: ['**/node_modules'] })
+// src/**/*.ts: node --watch restarts the server, and the client reloads on reconnect.
+const { inject } = liveReload(app, { ignore: ['**/node_modules', '.git', 'src/**/*.ts'] })
 
 const toFile = (id: string) => join('public', id)
 const isHtml = (id: string) => id.endsWith('.html')
@@ -29,9 +30,7 @@ app.use((event) => {
   })
 })
 
-const server = serve(app, { port: 3000 })
+const server = serve(app, { port: 3000, hostname: 'localhost' })
 await server.ready()
 
-const url = new URL(server.url!)
-if (url.hostname === '[::]' || url.hostname === '0.0.0.0') url.hostname = 'localhost'
-console.info('Started server on:', url.href)
+console.info('Started server on:', server.url)

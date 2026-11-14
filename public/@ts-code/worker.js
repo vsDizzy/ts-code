@@ -6,9 +6,6 @@ const VERSION = 'v1'
 const APP_CACHE_PREFIX = 'ts-code/'
 const log = (...args) => console.info(`[sw ${VERSION}]`, ...args)
 
-/** Names used before APP_CACHE_PREFIX existed; deleted on activate too. */
-const isLegacyCache = (name) => name.startsWith('ts-transpile:') || name === 'ts-config'
-
 /**
  * @typedef {object} Handler
  * @property {string} name
@@ -21,11 +18,11 @@ const isLegacyCache = (name) => name.startsWith('ts-transpile:') || name === 'ts
 /** @type {Handler[]} */
 const HANDLERS = [typescript({ cachePrefix: `${APP_CACHE_PREFIX}${VERSION}` })]
 
-/** Deletes caches under APP_CACHE_PREFIX (and legacy ones) no handler uses. */
+/** Deletes caches under APP_CACHE_PREFIX no handler uses. */
 async function deleteUnusedCaches() {
   const used = new Set(HANDLERS.flatMap((h) => h.caches))
   for (const name of await caches.keys()) {
-    if ((name.startsWith(APP_CACHE_PREFIX) && !used.has(name)) || isLegacyCache(name)) {
+    if (name.startsWith(APP_CACHE_PREFIX) && !used.has(name)) {
       log('deleting cache', name)
       await caches.delete(name)
     }
@@ -70,5 +67,5 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== location.origin) return
 
   const handler = HANDLERS.find((h) => h.match(url, event.request))
-  event.respondWith(handler ? handler.handle(event, url) : fetch(event.request))
+  if (handler) event.respondWith(handler.handle(event, url))
 })
