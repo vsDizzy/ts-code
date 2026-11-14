@@ -1,0 +1,16 @@
+// Client tsconfig: used by the editor, and by the service worker to transpile
+// this page's .ts/.tsx (it reads compilerOptions; see public/sw/typescript.js).
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    // Imports keep their .ts/.tsx extension: the browser requests those files.
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "include": ["app"]
+}

@@ -6,5 +6,7 @@
     "skipLibCheck": true,
     "types": ["node"],
     "jsx": "preserve"
-  }
+  },
+  // Server only; the client (public/) has its own tsconfig.json.
+  "include": ["src"]
 }

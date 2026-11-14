@@ -10,14 +10,15 @@
 // handler. It also resolves (with a warning) when that can't happen, so code
 // waiting on it always runs.
 //
-// <script type="ts" src="..."> (or with inline code): the browser ignores
-// unknown script types, so these stay inert until swControlled resolves; then
-// each is swapped for a real <script type="module"> with the same attributes,
-// so the app and everything it loads goes through the SW (which transpiles
-// .ts/.tsx).
+// Then starts the app, described by two files next to the page (the client is
+// its own project, separate from the server's root package.json):
 //
-// <script type="tsconfig.json">{ "compilerOptions": { ... } }</script>: sent to the
-// SW before the ts scripts start, and used to transpile this page's .ts files.
+//   tsconfig.json  sent to the SW, which transpiles this page's .ts/.tsx with it
+//   package.json   "dependencies" -> import map (esm.sh), "main" -> entry point
+//
+// Order matters: tsconfig is stored and the import map is in the DOM before
+// "main" is imported. An import map may be added from JS as long as no module
+// has been loaded yet, and none is: the page has no module scripts of its own.
 ;(() => {
   const log = (...args) => console.info('[sw-register]', ...args)
   const warn = (...args) => console.warn('[sw-register]', ...args)
@@ -25,14 +26,19 @@
   const { promise: controlled, resolve: resolveControlled } = Promise.withResolvers()
   window.swControlled = controlled
 
+  /** Text of `name` next to this page, or null if there's none. */
+  const loadText = async (name) => {
+    const res = await fetch(new URL(name, location.href))
+    return res.ok ? res.text() : null
+  }
+
   // Hands this page's tsconfig to the controlling SW and waits for it to be stored.
-  const sendTsConfig = async () => {
+  const sendTsConfig = async (config) => {
     const controller = navigator.serviceWorker?.controller
     if (!controller) {
-      warn('no service worker; <script type="ts"> will load untranspiled')
+      warn('no service worker; .ts/.tsx will load untranspiled')
       return
     }
-    const config = document.querySelector('script[type="tsconfig.json"]')?.textContent ?? null
     const { port1, port2 } = new MessageChannel()
     const { promise: ack, resolve } = Promise.withResolvers()
     port1.onmessage = resolve
@@ -42,16 +48,42 @@
     if ((await Promise.race([ack, timeout])) === 'timeout') warn('service worker did not ack tsconfig')
   }
 
-  controlled.then(async () => {
-    await sendTsConfig()
-    for (const placeholder of document.querySelectorAll('script[type="ts"]')) {
-      const script = document.createElement('script')
-      for (const { name, value } of placeholder.attributes) script.setAttribute(name, value)
-      script.type = 'module'
-      script.textContent = placeholder.textContent
-      placeholder.replaceWith(script)
+  // Each dependency gets its main entry and a prefix for subpaths
+  // ("react-dom/client"), both from esm.sh at the exact version given. esm.sh
+  // resolves a package's own imports (react-dom -> react) to the same URLs, so
+  // there's one copy of each as long as the versions here agree.
+  // Plus the package's own name, like a self-reference in Node: "app" -> main,
+  // "app/..." -> files next to package.json.
+  const importMapOf = (pkg, pkgUrl) => {
+    const imports = {}
+    for (const [name, version] of Object.entries(pkg.dependencies ?? {})) {
+      imports[name] = `https://esm.sh/${name}@${version}`
+      imports[`${name}/`] = `https://esm.sh/${name}@${version}/`
     }
-  })
+    if (pkg.name) {
+      if (pkg.main) imports[pkg.name] = new URL(pkg.main, pkgUrl).href
+      imports[`${pkg.name}/`] = new URL('./', pkgUrl).href
+    }
+    return { imports }
+  }
+
+  const start = async () => {
+    const pkgUrl = new URL('package.json', location.href)
+    const [pkgText, tsconfig] = await Promise.all([loadText(pkgUrl), loadText('tsconfig.json')])
+    await sendTsConfig(tsconfig)
+    if (pkgText == null) return warn('no package.json next to the page; nothing to start')
+    const pkg = JSON.parse(pkgText)
+
+    const script = document.createElement('script')
+    script.type = 'importmap'
+    script.textContent = JSON.stringify(importMapOf(pkg, pkgUrl), null, 2)
+    document.head.append(script)
+
+    if (!pkg.main) return warn('package.json has no "main"; nothing to start')
+    await import(new URL(pkg.main, pkgUrl).href)
+  }
+
+  controlled.then(start).catch((err) => console.error('[sw-register] failed to start the app:', err))
 
   if (!('serviceWorker' in navigator)) {
     warn('service workers not supported; continuing without one')

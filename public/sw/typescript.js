@@ -1,9 +1,9 @@
 // Service worker handler: *.ts / *.tsx (GET; sw.js only passes same-origin
 // requests to handlers) -> JavaScript.
 //
-// Compiler options = DEFAULT_COMPILER_OPTIONS + the page's
-// <script type="tsconfig.json">{ "compilerOptions": ... }</script>, which
-// sw-register.js sends here (TSCONFIG message) before any ts script runs.
+// Compiler options = DEFAULT_COMPILER_OPTIONS + compilerOptions of the
+// tsconfig.json next to the page (JSONC: comments and trailing commas are fine),
+// which sw-register.js sends here (TSCONFIG message) before the app starts.
 //
 // TypeScript 6.x is the last release with a JS API (7.x is the native Go
 // compiler), so it's pinned here.
@@ -93,20 +93,17 @@ const diagnosticsHost = {
 function transpile(source, fileName, configText) {
   let config = {}
   if (configText) {
-    try {
-      config = JSON.parse(configText)
-    } catch (err) {
-      return { error: `<script type="tsconfig.json">: invalid JSON: ${err.message}` }
-    }
+    const parsed = ts.parseConfigFileTextToJson('tsconfig.json', configText)
+    if (parsed.error) return { error: ts.formatDiagnostics([parsed.error], diagnosticsHost) }
+    config = parsed.config ?? {}
   }
 
   const converted = ts.convertCompilerOptionsFromJson(
     { ...DEFAULT_COMPILER_OPTIONS, ...config.compilerOptions },
     '/',
+    'tsconfig.json',
   )
-  if (converted.errors.length) {
-    return { error: '<script type="tsconfig.json">:\n' + ts.formatDiagnostics(converted.errors, diagnosticsHost) }
-  }
+  if (converted.errors.length) return { error: ts.formatDiagnostics(converted.errors, diagnosticsHost) }
 
   const out = ts.transpileModule(source, {
     fileName,
