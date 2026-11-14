@@ -1,23 +1,14 @@
-// Shared plumbing for handlers that turn a source file into something else
-// (TypeScript -> JS, etc.): fetch the source, transform it, cache the output.
-//
-// The output is revalidated against the server on every request using the
-// source's ETag (If-None-Match; the dev server sends no Last-Modified, see
-// src/app.ts). On 304 the cached output is served without transforming again. Errors are cached the same way:
-// same source + same settings = same errors.
+// Fetch a source, transform it, cache the output; revalidated by the source's ETag.
 
 /**
  * @typedef {{ body: string, contentType: string } | { error: string }} TransformResult
  *
  * @param {object} options
- * @param {URL} options.url Source URL.
- * @param {string} options.cacheName Cache Storage name for the output.
- * @param {string} [options.variant] Anything else the output depends on (e.g. a
- *   hash of the compiler config); outputs for different variants are cached apart.
+ * @param {URL} options.url
+ * @param {string} options.cacheName
+ * @param {string} [options.variant] Extra cache key part, e.g. a config hash.
  * @param {(source: string) => TransformResult} options.transform
- * @returns {Promise<Response>} The output (200), the error as text/plain (500),
- *   or the server's own response if fetching the source failed (404 etc.).
- *   The `x-transform-cache: hit|miss` header tells a 304 reuse from a fresh run.
+ * @returns {Promise<Response>}
  */
 export async function serveTransformed({ url, cacheName, variant, transform }) {
   const key = new URL(url)
@@ -26,8 +17,6 @@ export async function serveTransformed({ url, cacheName, variant, transform }) {
   const cache = await caches.open(cacheName)
   const cached = await cache.match(key)
 
-  // Manual conditional header + no-store: the HTTP cache stays out of it and
-  // the server's 304 reaches us as is.
   const headers = new Headers()
   const etag = cached?.headers.get('x-source-etag')
   if (etag) headers.set('if-none-match', etag)

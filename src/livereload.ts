@@ -1,9 +1,4 @@
-// Live reload (dev only): one recursive file watcher on the project,
-// broadcasting every change over SSE to connected pages.
-//
-// The client script (livereload.client.js) is served by this server at
-// `${path}.js` and added to HTML pages by `inject`, so nothing about live
-// reload is in public/ and a static deploy of public/ has none of it.
+// Live reload (dev only): file watcher -> SSE -> livereload.client.js.
 import { EventStream, type H3 } from 'h3'
 import { watch } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -14,20 +9,13 @@ const CLIENT_FILE = new URL('./livereload.client.js', import.meta.url)
 export interface LiveReloadOptions {
   /** Directory to watch. Default: current working directory. */
   root?: string
-  /**
-   * Globs (relative to `root`, forward slashes) whose changes are ignored.
-   * A match on a directory ignores everything inside it.
-   * Default: `['**\/node_modules']`.
-   */
+  /** Ignored globs relative to `root`; a matching directory is ignored entirely. */
   ignore?: string[]
   /** SSE endpoint path; the client script is served at `${path}.js`. Default: `/@ts-code/livereload`. */
   path?: string
 }
 
-/**
- * Registers the SSE endpoint and the client script on `app` and starts watching
- * for changes. Returns `inject`, which adds the client script to an HTML page.
- */
+/** Registers the SSE endpoint and client script, starts the watcher. */
 export function liveReload(app: H3, options: LiveReloadOptions = {}) {
   const { root = '.', ignore = ['**/node_modules'], path = '/@ts-code/livereload' } = options
 
@@ -38,11 +26,7 @@ export function liveReload(app: H3, options: LiveReloadOptions = {}) {
   let pending: ReturnType<typeof setTimeout> | undefined
   let changed = new Set<string>()
 
-  // Used as fs.watch's `ignore` predicate instead of passing the globs directly:
-  // Node's glob matching has no `dot` option, so `*`/`**` never match segments
-  // starting with "." and "**/node_modules/**" would miss everything under
-  // node_modules/.pnpm. Like .gitignore, a path is ignored if it or any parent
-  // directory matches a glob. Watch passes relative paths with OS separators.
+  // A predicate, not raw globs: Node's globs can't match dot segments (.pnpm).
   const isIgnored = (filename: string) => {
     const parts = filename.split(/[\\/]/)
     for (let i = 1; i <= parts.length; i++) {
