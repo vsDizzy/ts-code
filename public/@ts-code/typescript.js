@@ -1,9 +1,9 @@
-// Service worker handler: *.ts / *.tsx (GET; sw.js only passes same-origin
+// Service worker handler: *.ts / *.tsx (GET; worker.js only passes same-origin
 // requests to handlers) -> JavaScript.
 //
 // Compiler options = DEFAULT_COMPILER_OPTIONS + compilerOptions of the
 // tsconfig.json next to the page (JSONC: comments and trailing commas are fine),
-// which sw-register.js sends here (TSCONFIG message) before the app starts.
+// which register.js sends here (TSCONFIG message) before the app starts.
 //
 // TypeScript 6.x is the last release with a JS API (7.x is the native Go
 // compiler), so it's pinned here.
@@ -24,7 +24,7 @@ const DEFAULT_COMPILER_OPTIONS = {
  *   e.g. "ts-code/v1". It contains the SW VERSION, so bumping that drops all
  *   cached output, e.g. after changing this handler's code (unchanged sources
  *   would otherwise keep getting 304 -> old output).
- * @returns {import('../sw.js').Handler}
+ * @returns {import('./worker.js').Handler}
  */
 export function typescript({ cachePrefix }) {
   // Transpiled output. Invalidated by: SW VERSION, TypeScript version (cache
@@ -32,7 +32,7 @@ export function typescript({ cachePrefix }) {
   const cacheName = `${cachePrefix}/ts:${ts.version}`
   // Per-page tsconfig, keyed by page URL. Persisted, not kept in memory: the
   // browser may stop the worker at any time and later restart it for a fetch.
-  // Dropped with the SW version; pages resend it on every load (sw-register.js).
+  // Dropped with the SW version; pages resend it on every load (register.js).
   const configCache = `${cachePrefix}/tsconfig.json`
 
   return {

@@ -5,24 +5,28 @@ import { liveReload } from './livereload.ts'
 
 const app = new H3()
 
-// SSE endpoint /__livereload + file watcher; see src/livereload.ts.
-liveReload(app, { ignore: ['**/node_modules'] })
+// Dev-only live reload: SSE endpoint + client script under /@ts-code/livereload,
+// a file watcher, and `inject` for HTML pages; see src/livereload.ts.
+const { inject } = liveReload(app, { ignore: ['**/node_modules'] })
 
 // Serve files from public/ at the site root: GET /index.html -> public/index.html.
 // serveStatic passes the full request path as `id`.
 const toFile = (id: string) => join('public', id)
+const isHtml = (id: string) => id.endsWith('.html')
 
 app.use((event) => {
   return serveStatic(event, {
     // Let unmatched requests fall through to other routes / the default 404.
     fallthrough: true,
     indexNames: ['/index.html'],
-    getContents: (id) => readFile(toFile(id)),
+    getContents: async (id) => (isHtml(id) ? inject(await readFile(toFile(id), 'utf8')) : readFile(toFile(id))),
     getMeta: async (id) => {
       const stats = await stat(toFile(id)).catch(() => {})
       if (stats?.isFile()) {
         return {
-          size: stats.size,
+          // HTML gets the live reload script added, so the file size isn't the
+          // body size; leave Content-Length to the response itself.
+          size: isHtml(id) ? undefined : stats.size,
           // No mtime, so no Last-Modified: ETag only.
           // - Last-Modified has 1s precision, so two saves within the same
           //   second would still get a 304. The ETag uses full mtime precision.

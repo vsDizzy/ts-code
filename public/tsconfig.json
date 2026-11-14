@@ -1,5 +1,5 @@
 // Client tsconfig: used by the editor, and by the service worker to transpile
-// this page's .ts/.tsx (it reads compilerOptions; see public/sw/typescript.js).
+// this page's .ts/.tsx (it reads compilerOptions; see public/@ts-code/typescript.js).
 {
   "compilerOptions": {
     "target": "esnext",

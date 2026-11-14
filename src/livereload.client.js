@@ -1,7 +1,9 @@
 // Live reload client: listens to the server's SSE endpoint and reloads the page
-// when a watched file changes or the server restarts.
+// when a watched file changes or the server restarts. Served and added to HTML
+// pages by the dev server (src/livereload.ts); the endpoint is this script's
+// URL without ".js".
 ;(() => {
-  const source = new EventSource('/__livereload')
+  const source = new EventSource(document.currentScript.src.replace(/\.js$/, ''))
   let bootId
 
   // Sent on every (re)connect. A different id means the server was restarted,

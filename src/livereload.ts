@@ -1,8 +1,15 @@
-// Live reload: one recursive file watcher on the project, broadcasting every
-// change over SSE to connected pages (client: public/livereload.js).
+// Live reload (dev only): one recursive file watcher on the project,
+// broadcasting every change over SSE to connected pages.
+//
+// The client script (livereload.client.js) is served by this server at
+// `${path}.js` and added to HTML pages by `inject`, so nothing about live
+// reload is in public/ and a static deploy of public/ has none of it.
 import { EventStream, type H3 } from 'h3'
 import { watch } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { posix } from 'node:path'
+
+const CLIENT_FILE = new URL('./livereload.client.js', import.meta.url)
 
 export interface LiveReloadOptions {
   /** Directory to watch. Default: current working directory. */
@@ -13,13 +20,16 @@ export interface LiveReloadOptions {
    * Default: `['**\/node_modules']`.
    */
   ignore?: string[]
-  /** SSE endpoint path. Default: `/__livereload`. */
+  /** SSE endpoint path; the client script is served at `${path}.js`. Default: `/@ts-code/livereload`. */
   path?: string
 }
 
-/** Registers the SSE endpoint on `app` and starts watching for changes. */
+/**
+ * Registers the SSE endpoint and the client script on `app` and starts watching
+ * for changes. Returns `inject`, which adds the client script to an HTML page.
+ */
 export function liveReload(app: H3, options: LiveReloadOptions = {}) {
-  const { root = '.', ignore = ['**/node_modules'], path = '/__livereload' } = options
+  const { root = '.', ignore = ['**/node_modules'], path = '/@ts-code/livereload' } = options
 
   // New on every server start; clients reload if it differs after a reconnect.
   const bootId = Date.now().toString(36)
@@ -64,5 +74,15 @@ export function liveReload(app: H3, options: LiveReloadOptions = {}) {
     return stream
   })
 
-  return watcher
+  // Read on every request, so edits to the client apply without a restart.
+  app.get(`${path}.js`, async (event) => {
+    event.res.headers.set('content-type', 'text/javascript; charset=utf-8')
+    return readFile(CLIENT_FILE, 'utf8')
+  })
+
+  const tag = `<script src="${path}.js" defer></script>`
+  /** Adds the client script to an HTML page, at the end of <head> if there is one. */
+  const inject = (html: string) => (html.includes('</head>') ? html.replace('</head>', `  ${tag}\n</head>`) : tag + html)
+
+  return { watcher, inject }
 }

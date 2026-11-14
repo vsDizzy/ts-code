@@ -20,8 +20,8 @@
 // "main" is imported. An import map may be added from JS as long as no module
 // has been loaded yet, and none is: the page has no module scripts of its own.
 ;(() => {
-  const log = (...args) => console.info('[sw-register]', ...args)
-  const warn = (...args) => console.warn('[sw-register]', ...args)
+  const log = (...args) => console.info('[ts-code]', ...args)
+  const warn = (...args) => console.warn('[ts-code]', ...args)
 
   const { promise: controlled, resolve: resolveControlled } = Promise.withResolvers()
   window.swControlled = controlled
@@ -83,7 +83,7 @@
     await import(new URL(pkg.main, pkgUrl).href)
   }
 
-  controlled.then(start).catch((err) => console.error('[sw-register] failed to start the app:', err))
+  controlled.then(start).catch((err) => console.error('[ts-code] failed to start the app:', err))
 
   if (!('serviceWorker' in navigator)) {
     warn('service workers not supported; continuing without one')
@@ -138,7 +138,9 @@
     })
   }
 
-  // type: 'module' — sw.js uses static `import` (TypeScript from esm.sh).
+  // /sw.js only imports @ts-code/worker.js; it sits at the root so the scope
+  // (the script's folder) is the whole site.
+  // type: 'module' — the worker uses static `import` (TypeScript from esm.sh).
   // updateViaCache: 'none' — check sw.js (and its imports) against the server
   // on every update check, bypassing the HTTP cache.
   sw.register('/sw.js', { type: 'module', updateViaCache: 'none' })
@@ -167,7 +169,7 @@
       }
     })
     .catch((err) => {
-      console.error('[sw-register] registration failed:', err)
+      console.error('[ts-code] registration failed:', err)
       resolveControlled()
     })
 })()
