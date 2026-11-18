@@ -14,11 +14,12 @@ export interface ServerOptions {
 /** Serves `root` plus the runtime at /@<name>/, with live reload of `root`. */
 export async function startServer({ root, port = 3000 }: ServerOptions) {
   root = resolve(root)
-  const isIgnored = gitignore(root)
+  // New rules change what is served, so reload the page too.
+  const isIgnored = gitignore(root, () => reload('.gitignore'))
 
   const app = new H3()
   // Only client files; runtime and server changes need a manual reload / restart.
-  const { inject } = liveReload(app, { root, ignore: isIgnored })
+  const { inject, reload } = liveReload(app, { root, ignore: isIgnored })
 
   /** `path` inside `base`, or undefined if it escapes it. */
   const inside = (base: string, path: string) => {

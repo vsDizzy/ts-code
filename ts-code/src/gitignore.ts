@@ -11,10 +11,10 @@ const ALWAYS = ['.git', FILE]
 /**
  * `<root>/.gitignore` as a predicate (full gitignore syntax via the `ignore`
  * package, as in ESLint/Prettier; nested .gitignore files are not read). Rules are
- * re-read when the file changes. The predicate takes a path relative to `root`
- * ("/" or "\" separated).
+ * re-read when the file changes, then `onChange` is called. The predicate takes a
+ * path relative to `root` ("/" or "\" separated).
  */
-export function gitignore(root: string): (path: string) => boolean {
+export function gitignore(root: string, onChange?: () => void): (path: string) => boolean {
   let ig: Ignore
   const load = () => {
     let text = ''
@@ -30,6 +30,7 @@ export function gitignore(root: string): (path: string) => boolean {
     if (filename?.toString() !== FILE) return
     load()
     console.info(`[ts-code] ${FILE} changed, rules reloaded`)
+    onChange?.()
   }).unref()
 
   return (path) => {

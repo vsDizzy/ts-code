@@ -26,9 +26,9 @@ export function liveReload(app: H3, options: LiveReloadOptions = {}) {
   let pending: ReturnType<typeof setTimeout> | undefined
   let changed = new Set<string>()
 
-  const watcher = watch(root, { recursive: true, ignore }, (_type, filename) => {
-    if (!filename) return
-    changed.add(filename.toString().replaceAll('\\', '/'))
+  /** Queues a reload of all clients; `file` (relative to `root`) is listed in the event. */
+  const reload = (file: string) => {
+    changed.add(file.replaceAll('\\', '/'))
     // Editors emit several events per save; coalesce them into one reload.
     clearTimeout(pending)
     pending = setTimeout(() => {
@@ -38,6 +38,10 @@ export function liveReload(app: H3, options: LiveReloadOptions = {}) {
         client.push({ event: 'reload', data: JSON.stringify(files) }).catch(() => {})
       }
     }, 100)
+  }
+
+  const watcher = watch(root, { recursive: true, ignore }, (_type, filename) => {
+    if (filename) reload(filename.toString())
   })
 
   app.get(path, (event) => {
@@ -58,5 +62,5 @@ export function liveReload(app: H3, options: LiveReloadOptions = {}) {
   /** Adds the client script to an HTML page, at the end of <head> if there is one. */
   const inject = (html: string) => (html.includes('</head>') ? html.replace('</head>', `  ${tag}\n</head>`) : tag + html)
 
-  return { watcher, inject }
+  return { watcher, inject, reload }
 }
