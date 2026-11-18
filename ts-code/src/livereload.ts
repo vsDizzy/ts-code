@@ -2,7 +2,7 @@
 import { EventStream, type H3 } from 'h3'
 import { watch } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { RUNTIME_PATH } from './env.ts'
+import { RUNTIME_NAME } from './env.ts'
 
 const CLIENT_FILE = new URL('./livereload.client.js', import.meta.url)
 
@@ -17,7 +17,7 @@ export interface LiveReloadOptions {
 
 /** Registers the SSE endpoint and client script, starts the watcher. */
 export function liveReload(app: H3, options: LiveReloadOptions = {}) {
-  const { root = '.', ignore = () => false, path = `${RUNTIME_PATH}/livereload` } = options
+  const { root = '.', ignore = () => false, path = `/${RUNTIME_NAME}/livereload` } = options
 
   // New on every server start; clients reload if it differs after a reconnect.
   const bootId = Date.now().toString(36)

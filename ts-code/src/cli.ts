@@ -1,14 +1,19 @@
 #!/usr/bin/env node
-// ts-code [root] [--port <n>]: serves the client folder `root` (default ".").
+// ts-code [root] [--base <url path>] [--port <n>]: serves the client folder `root`
+// (default ".") under `base` (default "/").
 import { parseArgs } from 'node:util'
 import { startServer } from './app.ts'
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
-  options: { port: { type: 'string', short: 'p' } },
+  options: {
+    base: { type: 'string', short: 'b' },
+    port: { type: 'string', short: 'p' },
+  },
 })
 
 await startServer({
-  root: positionals[0] ?? '.',
+  root: positionals[0],
+  base: values.base,
   port: values.port ? Number(values.port) : undefined,
 })

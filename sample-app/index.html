@@ -10,7 +10,8 @@
   </style>
   <!-- Starts the app from ./package.json ("main", "dependencies") and
        ./tsconfig.json once the service worker controls the page. -->
-  <script src="/@ts-code/register.js" defer></script>
+  <!-- Relative, so it works under any base URL. -->
+  <script src="@ts-code/register.js" defer></script>
 </head>
 <body>
   <div id="root"></div>
