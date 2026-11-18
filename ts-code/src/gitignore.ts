@@ -1,22 +1,36 @@
 // The client's .gitignore as a predicate, shared by the watcher and the HTTP server.
-import ignore from 'ignore'
-import { readFileSync } from 'node:fs'
+import ignore, { type Ignore } from 'ignore'
+import { readFileSync, watch } from 'node:fs'
 import { join } from 'node:path'
 
+const FILE = '.gitignore'
+
 /** Always ignored, whatever .gitignore says. */
-const ALWAYS = ['.git', '.gitignore']
+const ALWAYS = ['.git', FILE]
 
 /**
- * Reads `<root>/.gitignore` once (full gitignore syntax via the `ignore` package,
- * as in ESLint/Prettier; nested .gitignore files are not read). The returned
- * predicate takes a path relative to `root` ("/" or "\" separated).
+ * `<root>/.gitignore` as a predicate (full gitignore syntax via the `ignore`
+ * package, as in ESLint/Prettier; nested .gitignore files are not read). Rules are
+ * re-read when the file changes. The predicate takes a path relative to `root`
+ * ("/" or "\" separated).
  */
 export function gitignore(root: string): (path: string) => boolean {
-  let text = ''
-  try {
-    text = readFileSync(join(root, '.gitignore'), 'utf8')
-  } catch {}
-  const ig = ignore().add(ALWAYS).add(text)
+  let ig: Ignore
+  const load = () => {
+    let text = ''
+    try {
+      text = readFileSync(join(root, FILE), 'utf8')
+    } catch {}
+    ig = ignore().add(ALWAYS).add(text)
+  }
+  load()
+
+  // The folder, not the file: editors that save via rename would end a file watch.
+  watch(root, (_type, filename) => {
+    if (filename?.toString() !== FILE) return
+    load()
+    console.info(`[ts-code] ${FILE} changed, rules reloaded`)
+  }).unref()
 
   return (path) => {
     path = path.replaceAll('\\', '/').replace(/^\/+/, '')
