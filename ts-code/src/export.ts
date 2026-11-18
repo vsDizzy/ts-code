@@ -2,7 +2,7 @@
 //   ts: the files as they are plus the runtime; the browser transpiles via the SW.
 //   js: .ts/.tsx transpiled here, an import map in each page; no runtime, no SW.
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
 import { RUNTIME_DIR, RUNTIME_NAME } from './env.ts'
 import { gitignore } from './gitignore.ts'
@@ -55,17 +55,26 @@ export async function exportStatic({ root = '.', out, mode = 'ts' }: ExportOptio
   }
 
   // lib.ts and lib.js (or lib.tsx) would both become lib.js.
+  // Read here, not by the browser: the root tsconfig.json, each package.json next
+  // to a page (its import map is in the HTML), and .d.ts files.
+  const pageDirs = new Set(files.filter(isHtml).map((path) => dirname(path)))
+  const exportOnly = (path: string) =>
+    path === 'tsconfig.json' ||
+    DTS_FILE.test(path) ||
+    (basename(path) === 'package.json' && pageDirs.has(dirname(path)))
+  const jsFiles = files.filter((path) => !exportOnly(path))
+
   const sources = new Map<string, string>()
-  for (const path of files) {
-    const target = TS_FILE.test(path) && !DTS_FILE.test(path) ? toJs(path) : path
+  for (const path of jsFiles) {
+    const target = TS_FILE.test(path) ? toJs(path) : path
     const other = sources.get(target)
     if (other) throw new Error(`${other} and ${path} would both be exported as ${target}`)
     sources.set(target, path)
   }
 
   const options = await compilerOptions(root)
-  for (const path of files) {
-    if (TS_FILE.test(path) && !DTS_FILE.test(path)) {
+  for (const path of jsFiles) {
+    if (TS_FILE.test(path)) {
       const source = await readFile(join(root, path), 'utf8')
       await write(toJs(path), await rewriteImports(transpile(source, path, options), dirname(join(root, path)), options))
     } else if (isHtml(path)) {
