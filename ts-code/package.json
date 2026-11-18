@@ -11,7 +11,8 @@
     "runtime"
   ],
   "dependencies": {
-    "h3": "^2.0.8"
+    "h3": "^2.0.8",
+    "ignore": "^7.0.14"
   },
   "devDependencies": {
     "@types/node": "^26.6.6"
