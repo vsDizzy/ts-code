@@ -1,7 +1,8 @@
 // Live reload (dev only): file watcher -> SSE -> livereload.client.js.
 import { EventStream, type H3 } from 'h3'
 import { watch } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
+import { join } from 'node:path'
 import { RUNTIME_NAME } from './env.ts'
 
 const CLIENT_FILE = new URL('./livereload.client.js', import.meta.url)
@@ -31,9 +32,15 @@ export function liveReload(app: H3, options: LiveReloadOptions = {}) {
     changed.add(file.replaceAll('\\', '/'))
     // Editors emit several events per save; coalesce them into one reload.
     clearTimeout(pending)
-    pending = setTimeout(() => {
-      const files = [...changed]
+    pending = setTimeout(async () => {
+      const batch = [...changed]
       changed = new Set()
+      // Only files that exist: atomic saves also report a temp file and the folder,
+      // which would turn a hot update into a full reload.
+      const isFile = (f: string) => stat(join(root, f)).then((s) => s.isFile(), () => false)
+      const exists = await Promise.all(batch.map(isFile))
+      const files = batch.filter((_, i) => exists[i])
+      if (!files.length) return
       for (const client of clients) {
         client.push({ event: 'reload', data: JSON.stringify(files) }).catch(() => {})
       }

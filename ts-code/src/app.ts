@@ -32,9 +32,10 @@ export async function startServer({ root = '.', base = '/', port = 3000 }: Serve
   const app = new H3()
   // Only client files; runtime and server changes need a manual reload / restart.
   const { tag: liveReloadTag, reload } = liveReload(app, { root, ignore: isIgnored, path: `${runtimePath}livereload` })
-  /** Runtime + live reload scripts; `id` is the request path of the page. */
+  /** Live reload + runtime scripts; `id` is the request path of the page. Live reload
+   * goes first: it sets up window.__tsCodeHot, which register.js uses (both defer). */
   const inject = (html: string, id: string) =>
-    injectIntoHead(html, `${registerTag(id.slice(base.length))}\n${liveReloadTag}`)
+    injectIntoHead(html, `${liveReloadTag}\n${registerTag(id.slice(base.length))}`)
 
   /** `path` inside `dir`, or undefined if it escapes it. */
   const inside = (dir: string, path: string) => {
@@ -51,6 +52,8 @@ export async function startServer({ root = '.', base = '/', port = 3000 }: Serve
     return isIgnored(path) ? undefined : inside(root, path)
   }
   const isHtml = (id: string) => id.endsWith('.html')
+  // Injected tags may change with the server code, so HTML ETags change on restart.
+  const htmlEtagSuffix = `-${Date.now().toString(36)}`
 
   app.use((event) => {
     const { pathname } = event.url
@@ -76,7 +79,7 @@ export async function startServer({ root = '.', base = '/', port = 3000 }: Serve
             // HTML is modified by inject().
             size: isHtml(id) ? undefined : stats.size,
             // ETag only: Last-Modified has 1s precision and enables heuristic caching.
-            etag: `W/"${stats.size.toString(36)}-${stats.mtimeMs.toString(36)}"`,
+            etag: `W/"${stats.size.toString(36)}-${stats.mtimeMs.toString(36)}${isHtml(id) ? htmlEtagSuffix : ''}"`,
           }
         }
       },

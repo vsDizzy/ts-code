@@ -2,7 +2,7 @@
 import { typescript } from './typescript.js'
 
 // Bump when handler code changes, to drop cached output.
-const VERSION = 'v2'
+const VERSION = 'v3'
 const APP_CACHE_PREFIX = 'ts-code/'
 const log = (...args) => console.info(`[sw ${VERSION}]`, ...args)
 

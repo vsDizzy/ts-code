@@ -18,8 +18,12 @@
     return res.ok ? res.text() : null
   }
 
+  // Set by the dev server's live reload script (loaded first); absent in an export.
+  const hot = window.__tsCodeHot
+
   // Hands this page's tsconfig to the controlling SW and waits for it to be stored.
-  const sendTsConfig = async (config) => {
+  // `refresh`: transpile with the React Refresh transform.
+  const sendTsConfig = async (config, refresh) => {
     const controller = navigator.serviceWorker?.controller
     if (!controller) {
       warn('no service worker; .ts/.tsx will load untranspiled')
@@ -28,18 +32,20 @@
     const { port1, port2 } = new MessageChannel()
     const { promise: ack, resolve } = Promise.withResolvers()
     port1.onmessage = resolve
-    controller.postMessage({ type: 'TSCONFIG', config }, [port2])
+    controller.postMessage({ type: 'TSCONFIG', config, refresh }, [port2])
     // An older SW version may not know TSCONFIG; don't hang the page on it.
     const timeout = new Promise((r) => setTimeout(() => r('timeout'), 2000))
     if ((await Promise.race([ack, timeout])) === 'timeout') warn('service worker did not ack tsconfig')
   }
 
   // dependencies -> esm.sh; own name -> main and files next to package.json.
-  const importMapOf = (pkg, pkgUrl) => {
+  // `dev`: development builds ("&dev" in the path also applies to subpaths).
+  const importMapOf = (pkg, pkgUrl, dev) => {
     const imports = {}
+    const flags = dev ? '&dev' : ''
     for (const [name, version] of Object.entries(pkg.dependencies ?? {})) {
-      imports[name] = `https://esm.sh/${name}@${version}`
-      imports[`${name}/`] = `https://esm.sh/${name}@${version}/`
+      imports[name] = `https://esm.sh/${name}@${version}${flags}`
+      imports[`${name}/`] = `https://esm.sh/${name}@${version}${flags}/`
     }
     if (pkg.name) {
       if (pkg.main) imports[pkg.name] = new URL(pkg.main, pkgUrl).href
@@ -51,13 +57,16 @@
   const start = async () => {
     const pkgUrl = new URL('package.json', location.href)
     const [pkgText, tsconfig] = await Promise.all([loadText(pkgUrl), loadText('tsconfig.json')])
-    await sendTsConfig(tsconfig)
-    if (pkgText == null) return warn('no package.json next to the page; nothing to start')
-    const pkg = JSON.parse(pkgText)
+    const pkg = pkgText == null ? null : JSON.parse(pkgText)
+    // React Fast Refresh (dev server, React app): runtime loaded before react-dom.
+    const refresh = !!pkg && !!(await hot?.setup(pkg))
+    await sendTsConfig(tsconfig, refresh)
+    if (!pkg) return warn('no package.json next to the page; nothing to start')
+    if (refresh) log('React Fast Refresh enabled')
 
     const script = document.createElement('script')
     script.type = 'importmap'
-    script.textContent = JSON.stringify(importMapOf(pkg, pkgUrl), null, 2)
+    script.textContent = JSON.stringify(importMapOf(pkg, pkgUrl, !!hot?.dev), null, 2)
     document.head.append(script)
 
     if (!pkg.main) return warn('package.json has no "main"; nothing to start')

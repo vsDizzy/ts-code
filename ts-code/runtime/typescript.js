@@ -4,6 +4,9 @@
 // such file (./lib.js -> lib.ts, then lib.tsx), as TypeScript resolves them.
 // Pinned to 6.x: 7.x (native Go compiler) has no JS API.
 import ts from 'https://esm.sh/typescript@6.0.3'
+// The core takes our ts instance (the package entry would pull in node's crypto).
+// Static: service workers can't use import().
+import refreshTransformer from 'https://esm.sh/react-refresh-typescript@2.0.12/dist/core.js'
 import { serveTransformed, sha256 } from './transform.js'
 
 /** Merged under the page's tsconfig compilerOptions. */
@@ -47,19 +50,24 @@ export function typescript({ cachePrefix }) {
       (TS_FILE.test(url.pathname) || isExtensionlessImport(url, request) || isJsImport(url, request)),
 
     async handle(event, url) {
-      const configText = await loadConfig(configCache, event.clientId)
+      const { configText, refresh } = await loadConfig(configCache, event.clientId)
       const config = parseConfig(configText)
       // Output depends on the source AND the options, so they're in the key.
-      const variant = await sha256(JSON.stringify([DEFAULT_COMPILER_OPTIONS, configText]))
+      const variant = await sha256(JSON.stringify([DEFAULT_COMPILER_OPTIONS, configText, refresh]))
 
       // Keyed by the real file, so /app/lib and /app/lib.ts share one cache entry.
-      const serve = (fileUrl) =>
-        serveTransformed({
+      // No query: a hot update imports App.tsx?t=..., which is the same file.
+      const serve = (fileUrl) => {
+        fileUrl = new URL(fileUrl)
+        fileUrl.search = ''
+        return serveTransformed({
           url: fileUrl,
           cacheName,
           variant,
-          transform: (source) => config.error ? config : transpile(source, fileUrl.pathname, config.options),
+          transform: (source) =>
+            config.error ? config : transpile(source, fileUrl.pathname, config.options, refresh),
         })
+      }
 
       if (TS_FILE.test(url.pathname)) return serve(url)
 
@@ -91,7 +99,7 @@ export function typescript({ cachePrefix }) {
     message(event) {
       if (event.data?.type !== 'TSCONFIG') return false
       event.waitUntil(
-        saveConfig(configCache, event.source.url, event.data.config).then(() =>
+        saveConfig(configCache, event.source.url, event.data.config, !!event.data.refresh).then(() =>
           event.ports[0]?.postMessage('ok'),
         ),
       )
@@ -102,18 +110,17 @@ export function typescript({ cachePrefix }) {
 
 // --- tsconfig ------------------------------------------------------------------
 
-async function saveConfig(cacheName, pageUrl, configText) {
+/** Stores the page's tsconfig text (null: none) and whether it wants React Refresh. */
+async function saveConfig(cacheName, pageUrl, configText, refresh) {
   const cache = await caches.open(cacheName)
-  if (configText == null) await cache.delete(pageUrl)
-  else await cache.put(pageUrl, new Response(configText))
+  await cache.put(pageUrl, Response.json({ configText, refresh }))
 }
 
-/** tsconfig text of the page that made the request, or null if it has none. */
+/** What saveConfig stored for the page that made the request. */
 async function loadConfig(cacheName, clientId) {
   const client = clientId && (await self.clients.get(clientId))
-  if (!client) return null
-  const res = await (await caches.open(cacheName)).match(client.url)
-  return res ? res.text() : null
+  const res = client && (await (await caches.open(cacheName)).match(client.url))
+  return res ? res.json() : { configText: null, refresh: false }
 }
 
 const diagnosticsHost = {
@@ -154,11 +161,42 @@ function parseConfig(configText) {
 
 // --- transpile -----------------------------------------------------------------
 
+/** No hash: signatures stay readable, and a sync hash would need node's crypto. */
+const reactRefresh = refreshTransformer({ ts })
+
+/**
+ * Appended to modules transpiled for React Refresh. The transform calls
+ * $RefreshReg$ / $RefreshSig$; these hoisted functions hand them to the page's
+ * window.__tsCodeHot (livereload.client.js), with ids from the file path so a
+ * re-imported App.tsx?t=... updates the same components. Also reports the module
+ * as loaded, so the page knows which URLs to re-import when the file changes.
+ */
+const refreshFooter = (file) => {
+  const f = JSON.stringify(file)
+  return [
+    `function $RefreshReg$(type, id) { globalThis.__tsCodeHot?.register(type, ${f} + ' ' + id) }`,
+    `function $RefreshSig$() { return globalThis.__tsCodeHot?.signature() ?? ((type) => type) }`,
+    `globalThis.__tsCodeHot?.loaded(${f}, import.meta.url)`,
+  ].join('\n')
+}
+
+/** Inserts `code` before the inline source map comment, so the mappings stay valid. */
+const appendCode = (output, code) => {
+  const at = output.lastIndexOf('\n//# sourceMappingURL=')
+  return at < 0 ? `${output}\n${code}\n` : `${output.slice(0, at)}\n${code}${output.slice(at)}`
+}
+
 /** @returns {import('./transform.js').TransformResult} */
-function transpile(source, fileName, compilerOptions) {
+function transpile(source, fileName, compilerOptions, refresh) {
   // fileName's extension decides whether JSX is parsed (.tsx).
-  const out = ts.transpileModule(source, { fileName, compilerOptions, reportDiagnostics: true })
+  const out = ts.transpileModule(source, {
+    fileName,
+    compilerOptions,
+    reportDiagnostics: true,
+    transformers: refresh ? { before: [reactRefresh] } : undefined,
+  })
   const errors = (out.diagnostics ?? []).filter((d) => d.category === ts.DiagnosticCategory.Error)
   if (errors.length) return { error: ts.formatDiagnostics(errors, diagnosticsHost) }
-  return { body: out.outputText, contentType: 'text/javascript; charset=utf-8' }
+  const body = refresh ? appendCode(out.outputText, refreshFooter(fileName)) : out.outputText
+  return { body, contentType: 'text/javascript; charset=utf-8' }
 }
