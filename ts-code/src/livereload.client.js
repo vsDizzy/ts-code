@@ -43,6 +43,12 @@
     },
   }
 
+  // Importers keep the old module, so only components (swapped by React) may change.
+  const onlyComponents = (mod) => {
+    const exports = Object.values(mod)
+    return exports.length > 0 && exports.every((value) => refresh.isLikelyComponentType(value))
+  }
+
   /**
    * Re-imports the changed modules and refreshes React. False if that can't
    * apply the change, so the page must reload.
@@ -56,6 +62,14 @@
       if (!loaded) return false // not loaded by this page, or not through the SW
       urls.push(...loaded)
     }
+    // The loaded modules first: import() of the same URL doesn't run them again,
+    // while re-importing e.g. main.tsx would re-run its side effects.
+    for (const url of urls) {
+      if (!onlyComponents(await import(url))) {
+        console.info('[hot] not only components exported:', url)
+        return false
+      }
+    }
     const t = Date.now()
     for (const url of urls) {
       const next = new URL(url)
@@ -68,10 +82,8 @@
         console.error('[hot] update failed, fix and save again:', err)
         return true
       }
-      // Importers keep the old module, so only components (swapped by React) may change.
-      const exports = Object.values(mod)
-      if (!exports.length || !exports.every((value) => refresh.isLikelyComponentType(value))) {
-        console.info('[hot] not only components exported:', url)
+      if (!onlyComponents(mod)) {
+        console.info('[hot] not only components exported now:', url)
         return false
       }
     }
