@@ -1,5 +1,9 @@
-// Registers /sw.js, then starts the app from ./package.json and ./tsconfig.json.
+// Registers worker.js (next to this script) for the whole site, then starts the
+// app from ./package.json and ./tsconfig.json.
 ;(() => {
+  // Read now: currentScript is only set while this script runs synchronously.
+  const workerUrl = new URL('worker.js', document.currentScript.src)
+
   const log = (...args) => console.info('[ts-code]', ...args)
   const warn = (...args) => console.warn('[ts-code]', ...args)
 
@@ -109,7 +113,8 @@
     })
   }
 
-  sw.register('/sw.js', { type: 'module', updateViaCache: 'none' })
+  // Scope "/" is above the script's folder; the server allows it with Service-Worker-Allowed.
+  sw.register(workerUrl, { type: 'module', scope: '/', updateViaCache: 'none' })
     .then((reg) => {
       // Waiting since an earlier visit.
       if (reg.waiting && reg.active) activate(reg.waiting)

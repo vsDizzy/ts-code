@@ -9,6 +9,13 @@
       "autoPort": false
     },
     {
+      "name": "sample-app",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["start"],
+      "port": 3000,
+      "autoPort": false
+    },
+    {
       "name": "running",
       "url": "http://localhost:3000"
     }

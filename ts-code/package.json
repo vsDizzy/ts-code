@@ -1,0 +1,19 @@
+{
+  "name": "ts-code",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "ts-code": "./src/cli.ts"
+  },
+  "files": [
+    "src",
+    "runtime"
+  ],
+  "dependencies": {
+    "h3": "^2.0.8"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6"
+  }
+}

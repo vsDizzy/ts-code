@@ -9,6 +9,6 @@
     "types": ["node"],
     "jsx": "preserve"
   },
-  // Server only; the client (public/) has its own tsconfig.json.
+  // Server only; runtime/ is plain JS and each client app has its own tsconfig.json.
   "include": ["src"]
 }

@@ -1,6 +1,5 @@
 {
-  "name": "ts-code",
-  "version": "0.1.0",
+  "name": "ts-code-monorepo",
   "private": true,
   "devEngines": {
     "packageManager": {
@@ -9,13 +8,7 @@
   },
   "type": "module",
   "scripts": {
-    "start": "node src/app.ts",
-    "dev": "node --watch src/app.ts"
-  },
-  "dependencies": {
-    "h3": "^2.0.8"
-  },
-  "devDependencies": {
-    "@types/node": "^26.6.6"
+    "dev": "node --watch ts-code/src/cli.ts sample-app",
+    "start": "pnpm --filter sample-app dev"
   }
 }
