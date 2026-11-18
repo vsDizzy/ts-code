@@ -8,10 +8,8 @@
         color-scheme: light dark;
       }
     </style>
-    <!-- Starts the app from ./package.json ("main", "dependencies") and
-       ./tsconfig.json once the service worker controls the page. -->
-    <!-- Relative, so it works under any base URL. -->
-    <script src="@ts-code/register.js" defer></script>
+    <!-- ts-code adds its scripts here; they start the app from
+         ./package.json ("main", "dependencies") and ./tsconfig.json. -->
   </head>
   <body>
     <div id="root"></div>

@@ -11,8 +11,9 @@ const ALWAYS = ['.git', FILE]
 /**
  * `<root>/.gitignore` as a predicate (full gitignore syntax via the `ignore`
  * package, as in ESLint/Prettier; nested .gitignore files are not read). Rules are
- * re-read when the file changes, then `onChange` is called. The predicate takes a
- * path relative to `root` ("/" or "\" separated).
+ * re-read when the file changes, then `onChange` is called; without `onChange` the
+ * file is read once. The predicate takes a path relative to `root` ("/" or "\"
+ * separated).
  */
 export function gitignore(root: string, onChange?: () => void): (path: string) => boolean {
   let ig: Ignore
@@ -26,12 +27,14 @@ export function gitignore(root: string, onChange?: () => void): (path: string) =
   load()
 
   // The folder, not the file: editors that save via rename would end a file watch.
-  watch(root, (_type, filename) => {
-    if (filename?.toString() !== FILE) return
-    load()
-    console.info(`[ts-code] ${FILE} changed, rules reloaded`)
-    onChange?.()
-  }).unref()
+  if (onChange) {
+    watch(root, (_type, filename) => {
+      if (filename?.toString() !== FILE) return
+      load()
+      console.info(`[ts-code] ${FILE} changed, rules reloaded`)
+      onChange()
+    }).unref()
+  }
 
   return (path) => {
     path = path.replaceAll('\\', '/').replace(/^\/+/, '')

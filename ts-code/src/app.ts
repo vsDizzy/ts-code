@@ -3,6 +3,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { join, relative, resolve, sep } from 'node:path'
 import { RUNTIME_DIR, RUNTIME_NAME } from './env.ts'
 import { gitignore } from './gitignore.ts'
+import { injectIntoHead, registerTag, SW_FILE, SW_SOURCE } from './html.ts'
 import { liveReload } from './livereload.ts'
 
 export interface ServerOptions {
@@ -30,7 +31,10 @@ export async function startServer({ root = '.', base = '/', port = 3000 }: Serve
 
   const app = new H3()
   // Only client files; runtime and server changes need a manual reload / restart.
-  const { inject, reload } = liveReload(app, { root, ignore: isIgnored, path: `${runtimePath}livereload` })
+  const { tag: liveReloadTag, reload } = liveReload(app, { root, ignore: isIgnored, path: `${runtimePath}livereload` })
+  /** Runtime + live reload scripts; `id` is the request path of the page. */
+  const inject = (html: string, id: string) =>
+    injectIntoHead(html, `${registerTag(id.slice(base.length))}\n${liveReloadTag}`)
 
   /** `path` inside `dir`, or undefined if it escapes it. */
   const inside = (dir: string, path: string) => {
@@ -52,19 +56,21 @@ export async function startServer({ root = '.', base = '/', port = 3000 }: Serve
     const { pathname } = event.url
     // "/" and "/app" -> "/app/": the page must be inside the worker's scope.
     if (base !== '/' && (pathname === '/' || pathname === base.slice(0, -1))) return redirect(base)
-    // The worker script lives under <base>@<name>/ but controls all of <base>.
-    if (pathname === `${runtimePath}worker.js`) event.res.headers.set('service-worker-allowed', base)
+    if (pathname === `${base}${SW_FILE}`) {
+      event.res.headers.set('content-type', 'text/javascript; charset=utf-8')
+      return SW_SOURCE
+    }
 
     return serveStatic(event, {
       fallthrough: true,
       indexNames: ['/index.html'],
       getContents: async (id) => {
         const file = toFile(id)!
-        return isHtml(id) ? inject(await readFile(file, 'utf8')) : readFile(file)
+        return isHtml(id) ? inject(await readFile(file, 'utf8'), id) : readFile(file)
       },
       getMeta: async (id) => {
         const file = toFile(id)
-        const stats = file && (await stat(file).catch(() => {}))
+        const stats = file ? await stat(file).catch(() => undefined) : undefined
         if (stats?.isFile()) {
           return {
             // HTML is modified by inject().

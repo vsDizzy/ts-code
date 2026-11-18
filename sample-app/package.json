@@ -4,7 +4,9 @@
   "type": "module",
   "main": "./app/main.tsx",
   "scripts": {
-    "dev": "ts-code ."
+    "dev": "ts-code .",
+    "export": "ts-code export . --out dist",
+    "export:js": "ts-code export . --out dist --mode js"
   },
   "dependencies": {
     "react": "19.3.1",
