@@ -54,7 +54,6 @@ export async function exportStatic({ root = '.', out, mode = 'ts' }: ExportOptio
     return out
   }
 
-  // lib.ts and lib.js (or lib.tsx) would both become lib.js.
   // Read here, not by the browser: the root tsconfig.json, each package.json next
   // to a page (its import map is in the HTML), and .d.ts files.
   const pageDirs = new Set(files.filter(isHtml).map((path) => dirname(path)))
@@ -64,6 +63,7 @@ export async function exportStatic({ root = '.', out, mode = 'ts' }: ExportOptio
     (basename(path) === 'package.json' && pageDirs.has(dirname(path)))
   const jsFiles = files.filter((path) => !exportOnly(path))
 
+  // lib.ts and lib.js (or lib.tsx) would both become lib.js.
   const sources = new Map<string, string>()
   for (const path of jsFiles) {
     const target = TS_FILE.test(path) ? toJs(path) : path

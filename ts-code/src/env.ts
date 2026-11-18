@@ -2,11 +2,9 @@
 import { fileURLToPath } from 'node:url'
 import pkg from '../package.json' with { type: 'json' }
 
-/** package.json "name". */
 export const APP_PREFIX = pkg.name
 
 /** URL folder of the runtime, relative to the base URL: `<base>@<name>/`. */
 export const RUNTIME_NAME = `@${APP_PREFIX}`
 
-/** The runtime folder on disk. */
 export const RUNTIME_DIR = fileURLToPath(new URL('../runtime/', import.meta.url))

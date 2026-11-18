@@ -1,7 +1,5 @@
-// SW handler: *.ts / *.tsx -> JavaScript, with the page's tsconfig.
-// Also extensionless module imports (./lib -> lib.ts, then lib.tsx) unless
-// the tsconfig sets allowImportingTsExtensions, and .js module imports with no
-// such file (./lib.js -> lib.ts, then lib.tsx), as TypeScript resolves them.
+// SW handler: *.ts / *.tsx -> JavaScript, with the page's tsconfig; also resolves
+// extensionless and .js module imports to .ts / .tsx.
 // Pinned to 6.x: 7.x (native Go compiler) has no JS API.
 import ts from 'https://esm.sh/typescript@6.0.3'
 // The core takes our ts instance (the package entry would pull in node's crypto).
@@ -22,7 +20,7 @@ const TS_FILE = /\.tsx?$/
  * served under /app/lib, its relative imports would resolve against /app/. */
 const RESOLVE_EXTENSIONS = ['.ts', '.tsx']
 
-/** A module import whose last path segment has no extension, e.g. /app/lib. */
+/** e.g. /app/lib; skipped when the tsconfig sets allowImportingTsExtensions. */
 const isExtensionlessImport = (url, request) =>
   request.destination === 'script' && /\/[^/.]+$/.test(url.pathname)
 

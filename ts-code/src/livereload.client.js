@@ -19,11 +19,9 @@
     return u.href
   }
 
-  // Used by register.js (setup, dev) and by modules the service worker transpiled
-  // with the refresh transform (register, signature, loaded).
+  // Used by register.js (setup; its presence means "dev server") and by modules
+  // the service worker transpiled with the refresh transform (register, signature, loaded).
   window.__tsCodeHot = {
-    /** Dev server: the import map points at development builds. */
-    dev: true,
     /** Loads the refresh runtime if the app uses React; true if it did. Must run before react-dom loads. */
     async setup(pkg) {
       if (!pkg.dependencies?.react) return false

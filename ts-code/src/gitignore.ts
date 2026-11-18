@@ -1,11 +1,8 @@
-// The client's .gitignore as a predicate, shared by the watcher and the HTTP server.
 import ignore, { type Ignore } from 'ignore'
 import { readFileSync, watch } from 'node:fs'
 import { join } from 'node:path'
 
 const FILE = '.gitignore'
-
-/** Always ignored, whatever .gitignore says. */
 const ALWAYS = ['.git', FILE]
 
 /**

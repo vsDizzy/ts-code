@@ -10,7 +10,6 @@
   const warn = (...args) => console.warn('[ts-code]', ...args)
 
   const { promise: controlled, resolve: resolveControlled } = Promise.withResolvers()
-  window.swControlled = controlled
 
   /** Text of `name` next to this page, or null if there's none. */
   const loadText = async (name) => {
@@ -66,7 +65,7 @@
 
     const script = document.createElement('script')
     script.type = 'importmap'
-    script.textContent = JSON.stringify(importMapOf(pkg, pkgUrl, !!hot?.dev), null, 2)
+    script.textContent = JSON.stringify(importMapOf(pkg, pkgUrl, !!hot), null, 2)
     document.head.append(script)
 
     if (!pkg.main) return warn('package.json has no "main"; nothing to start')

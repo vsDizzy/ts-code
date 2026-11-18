@@ -11,7 +11,7 @@ export const SW_FILE = `${RUNTIME_NAME}.sw.js`
 export const SW_SOURCE = `import './${RUNTIME_NAME}/worker.js'\n`
 
 /** "../" per folder between an HTML file (path relative to the root) and the root. */
-export const toRoot = (htmlPath: string) => '../'.repeat(Math.max(0, htmlPath.split('/').filter(Boolean).length - 1))
+const toRoot = (htmlPath: string) => '../'.repeat(Math.max(0, htmlPath.split('/').filter(Boolean).length - 1))
 
 /** Script tag that loads the runtime, relative to the HTML file at `htmlPath`. */
 export const registerTag = (htmlPath: string) =>

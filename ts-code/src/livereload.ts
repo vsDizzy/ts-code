@@ -47,7 +47,7 @@ export function liveReload(app: H3, options: LiveReloadOptions = {}) {
     }, 100)
   }
 
-  const watcher = watch(root, { recursive: true, ignore }, (_type, filename) => {
+  watch(root, { recursive: true, ignore }, (_type, filename) => {
     if (filename) reload(filename.toString())
   })
 
@@ -65,8 +65,5 @@ export function liveReload(app: H3, options: LiveReloadOptions = {}) {
     return readFile(CLIENT_FILE, 'utf8')
   })
 
-  /** Script tag for HTML pages. */
-  const tag = `<script src="${path}.js" defer></script>`
-
-  return { watcher, tag, reload }
+  return { tag: `<script src="${path}.js" defer></script>`, reload }
 }
