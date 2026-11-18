@@ -54,6 +54,15 @@ export async function exportStatic({ root = '.', out, mode = 'ts' }: ExportOptio
     return out
   }
 
+  // lib.ts and lib.js (or lib.tsx) would both become lib.js.
+  const sources = new Map<string, string>()
+  for (const path of files) {
+    const target = TS_FILE.test(path) && !DTS_FILE.test(path) ? toJs(path) : path
+    const other = sources.get(target)
+    if (other) throw new Error(`${other} and ${path} would both be exported as ${target}`)
+    sources.set(target, path)
+  }
+
   const options = await compilerOptions(root)
   for (const path of files) {
     if (TS_FILE.test(path) && !DTS_FILE.test(path)) {

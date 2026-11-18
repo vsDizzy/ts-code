@@ -1,6 +1,7 @@
 // SW handler: *.ts / *.tsx -> JavaScript, with the page's tsconfig.
 // Also extensionless module imports (./lib -> lib.ts, then lib.tsx) unless
-// the tsconfig sets allowImportingTsExtensions.
+// the tsconfig sets allowImportingTsExtensions, and .js module imports with no
+// such file (./lib.js -> lib.ts, then lib.tsx), as TypeScript resolves them.
 // Pinned to 6.x: 7.x (native Go compiler) has no JS API.
 import ts from 'https://esm.sh/typescript@6.0.3'
 import { serveTransformed, sha256 } from './transform.js'
@@ -22,6 +23,10 @@ const RESOLVE_EXTENSIONS = ['.ts', '.tsx']
 const isExtensionlessImport = (url, request) =>
   request.destination === 'script' && /\/[^/.]+$/.test(url.pathname)
 
+const JS_FILE = /\.js$/
+/** A .js module import; served as is if the file exists, else from .ts / .tsx. */
+const isJsImport = (url, request) => request.destination === 'script' && JS_FILE.test(url.pathname)
+
 /**
  * @param {object} options
  * @param {string} options.cachePrefix e.g. "ts-code/v1"
@@ -38,7 +43,8 @@ export function typescript({ cachePrefix }) {
     caches: [cacheName, configCache],
 
     match: (url, request) =>
-      request.method === 'GET' && (TS_FILE.test(url.pathname) || isExtensionlessImport(url, request)),
+      request.method === 'GET' &&
+      (TS_FILE.test(url.pathname) || isExtensionlessImport(url, request) || isJsImport(url, request)),
 
     async handle(event, url) {
       const configText = await loadConfig(configCache, event.clientId)
@@ -57,17 +63,29 @@ export function typescript({ cachePrefix }) {
 
       if (TS_FILE.test(url.pathname)) return serve(url)
 
-      if (config.options?.allowImportingTsExtensions) return fetch(event.request)
       // Probed on every request: a new, deleted or renamed file is picked up on the
       // next load, with no resolution cache to invalidate.
-      for (const ext of RESOLVE_EXTENSIONS) {
-        const candidate = new URL(url)
-        candidate.pathname += ext
-        const res = await serve(candidate)
-        if (res.status !== 404) return res
-        await res.body?.cancel()
+      /** First non-404 of `base` + each RESOLVE_EXTENSIONS entry, or null. */
+      const resolve = async (base) => {
+        for (const ext of RESOLVE_EXTENSIONS) {
+          const candidate = new URL(url)
+          candidate.pathname = base + ext
+          const res = await serve(candidate)
+          if (res.status !== 404) return res
+          await res.body?.cancel()
+        }
+        return null
       }
-      return fetch(event.request)
+
+      if (JS_FILE.test(url.pathname)) {
+        // A real .js file wins; .ts / .tsx are only tried after a 404.
+        const res = await fetch(event.request)
+        if (res.status !== 404) return res
+        return (await resolve(url.pathname.replace(JS_FILE, ''))) ?? res
+      }
+
+      if (config.options?.allowImportingTsExtensions) return fetch(event.request)
+      return (await resolve(url.pathname)) ?? fetch(event.request)
     },
 
     message(event) {

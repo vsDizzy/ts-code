@@ -20,8 +20,13 @@ const { values, positionals } = parseArgs({
 if (positionals[0] === 'export') {
   const mode = (values.mode ?? 'ts') as ExportMode
   if (mode !== 'ts' && mode !== 'js') throw new Error(`--mode must be "ts" or "js", got "${mode}"`)
-  const out = await exportStatic({ root: positionals[1], out: values.out, mode })
-  console.info(`Exported to ${out} (${mode} mode)`)
+  try {
+    const out = await exportStatic({ root: positionals[1], out: values.out, mode })
+    console.info(`Exported to ${out} (${mode} mode)`)
+  } catch (err) {
+    console.error(`Export failed: ${err instanceof Error ? err.message : err}`)
+    process.exitCode = 1
+  }
 } else {
   await startServer({
     root: positionals[0],
