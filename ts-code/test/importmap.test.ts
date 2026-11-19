@@ -82,6 +82,8 @@ describe('importMap', () => {
     })
     assert.throws(() => importMap(withExternal('bundle&external=b,react'), exportOptions), /external "react" is not in the import map/)
     assert.doesNotThrow(() => importMap(withExternal('external=b,b/*'), exportOptions))
+    // "*" (all imports external) can't be checked without the package's own deps.
+    assert.equal(importMap(withExternal('external=*'), exportOptions).imports.a, 'https://esm.sh/a@1.0.0?external=*')
     // An "imports" entry counts too.
     assert.doesNotThrow(() => importMap(withExternal('external=c', { c: 'https://cdn.example/c.js' }), exportOptions))
   })

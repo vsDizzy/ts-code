@@ -8,7 +8,9 @@
 // - `"ts-code": { "esm.sh": { <dependency>: "bundle&external=x" } }`: esm.sh
 //   options for that dependency, passed as is. Every name in an `external=`
 //   must be a key of the map: the browser resolves it through the map, which
-//   is where its version comes from (dependencies), so no `deps=` is needed;
+//   is where its version comes from (dependencies), so no `deps=` is needed.
+//   `external=*` (all imports bare) is not checked: then every import of that
+//   package, transitive ones included, must be in the map;
 // - the package's own name -> `main`, `<name>/` -> files next to package.json;
 // - `"ts-code": { "imports": { key: value } }` adds or overrides entries:
 //     "https://…", "/…", "./…", "../…"   used as is;
@@ -118,7 +120,8 @@ export function importMap(pkg, { dev = false, main, pkgBase }) {
       if (key !== 'external' || !value) continue
       for (const external of value.split(',')) {
         const dep = external.replace(/\/\*$/, '')
-        if (Object.hasOwn(imports, dep) || Object.hasOwn(imports, `${dep}/`)) continue
+        // "*": every import stays bare; which ones isn't known here, so not checked.
+        if (dep === '*' || Object.hasOwn(imports, dep) || Object.hasOwn(imports, `${dep}/`)) continue
         throw new Error(
           `"ts-code"["esm.sh"]["${name}"]: external "${dep}" is not in the import map; add it to dependencies`,
         )
