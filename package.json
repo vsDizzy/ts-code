@@ -9,6 +9,7 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch ts-code/src/cli.ts sample-app",
-    "start": "pnpm --filter sample-app dev"
+    "start": "pnpm --filter sample-app dev",
+    "test": "pnpm --filter ts-code test"
   }
 }

@@ -4,6 +4,7 @@
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
+import { importMap, type Manifest } from '../runtime/importmap.js'
 import { RUNTIME_DIR, RUNTIME_NAME } from './env.ts'
 import { gitignore } from './gitignore.ts'
 import { injectIntoHead, registerTag, SW_FILE, SW_SOURCE } from './html.ts'
@@ -169,12 +170,6 @@ async function rewriteImports(code: string, dir: string, options: ts.CompilerOpt
   return code
 }
 
-interface Manifest {
-  name?: string
-  main?: string
-  dependencies?: Record<string, string>
-}
-
 /**
  * The page with the import map and entry script that runtime/register.js would
  * add at runtime, from the package.json next to it (unchanged if there is none).
@@ -185,19 +180,9 @@ async function pageWithImportMap(root: string, path: string) {
   if (text == null) return html
   const pkg: Manifest = JSON.parse(text)
 
-  // Same map as runtime/register.js, with main pointing at the .js output.
+  // Same builder as runtime/register.js; URLs relative to the page, main at the .js output.
   const main = pkg.main && toJs(pkg.main.startsWith('.') ? pkg.main : `./${pkg.main}`)
-  const imports: Record<string, string> = {}
-  for (const [name, version] of Object.entries(pkg.dependencies ?? {})) {
-    imports[name] = `https://esm.sh/${name}@${version}`
-    imports[`${name}/`] = `https://esm.sh/${name}@${version}/`
-  }
-  if (pkg.name) {
-    if (main) imports[pkg.name] = main
-    imports[`${pkg.name}/`] = './'
-  }
-
-  const map = JSON.stringify({ imports }, null, 2).replaceAll('\n', '\n  ')
+  const map = JSON.stringify(importMap(pkg, { main, pkgBase: './' }), null, 2).replaceAll('\n', '\n  ')
   let snippet = `<script type="importmap">\n  ${map}\n</script>`
   if (main) snippet += `\n<script type="module" src="${main}"></script>`
   return injectIntoHead(html, snippet)

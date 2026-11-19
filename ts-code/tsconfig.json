@@ -6,9 +6,12 @@
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
+    // For runtime/importmap.js, shared with the export (checked via its // @ts-check).
+    "allowJs": true,
     "types": ["node"],
     "jsx": "preserve"
   },
-  // Server only; runtime/ is plain JS and each client app has its own tsconfig.json.
-  "include": ["src"]
+  // Server and tests; runtime/ is plain JS (only importmap.js, imported by the
+  // export, is checked) and each client app has its own tsconfig.json.
+  "include": ["src", "test"]
 }

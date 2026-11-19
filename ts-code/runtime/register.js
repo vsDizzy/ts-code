@@ -5,6 +5,8 @@
   // worker.js, and its folder (<base>) is the worker's scope. Read now:
   // currentScript is only set while this script runs synchronously.
   const swUrl = new URL('../@ts-code.sw.js', document.currentScript.src)
+  // Shared with the js export (src/export.ts).
+  const importMapUrl = new URL('importmap.js', document.currentScript.src)
 
   const log = (...args) => console.info('[ts-code]', ...args)
   const warn = (...args) => console.warn('[ts-code]', ...args)
@@ -37,22 +39,6 @@
     if ((await Promise.race([ack, timeout])) === 'timeout') warn('service worker did not ack tsconfig')
   }
 
-  // dependencies -> esm.sh; own name -> main and files next to package.json.
-  // `dev`: development builds ("&dev" in the path also applies to subpaths).
-  const importMapOf = (pkg, pkgUrl, dev) => {
-    const imports = {}
-    const flags = dev ? '&dev' : ''
-    for (const [name, version] of Object.entries(pkg.dependencies ?? {})) {
-      imports[name] = `https://esm.sh/${name}@${version}${flags}`
-      imports[`${name}/`] = `https://esm.sh/${name}@${version}${flags}/`
-    }
-    if (pkg.name) {
-      if (pkg.main) imports[pkg.name] = new URL(pkg.main, pkgUrl).href
-      imports[`${pkg.name}/`] = new URL('./', pkgUrl).href
-    }
-    return { imports }
-  }
-
   const start = async () => {
     const pkgUrl = new URL('package.json', location.href)
     const [pkgText, tsconfig] = await Promise.all([loadText(pkgUrl), loadText('tsconfig.json')])
@@ -63,9 +49,16 @@
     if (!pkg) return warn('no package.json next to the page; nothing to start')
     if (refresh) log('React Fast Refresh enabled')
 
+    // Dev server (`hot`): esm.sh development builds, which React Refresh needs.
+    const { importMap } = await import(importMapUrl.href)
+    const map = importMap(pkg, {
+      dev: !!hot,
+      main: pkg.main && new URL(pkg.main, pkgUrl).href,
+      pkgBase: new URL('./', pkgUrl).href,
+    })
     const script = document.createElement('script')
     script.type = 'importmap'
-    script.textContent = JSON.stringify(importMapOf(pkg, pkgUrl, !!hot), null, 2)
+    script.textContent = JSON.stringify(map, null, 2)
     document.head.append(script)
 
     if (!pkg.main) return warn('package.json has no "main"; nothing to start')
